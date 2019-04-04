@@ -28,5 +28,8 @@
     <ClInclude Include="TGAFormat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BMPFormat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

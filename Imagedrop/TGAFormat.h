@@ -1,3 +1,9 @@
+/*
+More about the file format specification
+https://en.wikipedia.org/wiki/Truevision_TGA
+http://www.dca.fee.unicamp.br/~martino/disciplinas/ea978/tgaffs.pdf
+http://tfc.duke.free.fr/coding/tga_specs.pdf
+*/
 #pragma once
 
 #include <iostream>
