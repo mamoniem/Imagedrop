@@ -164,6 +164,7 @@
   <ItemGroup>
     <ClInclude Include="Bits.h" />
     <ClInclude Include="BMPFormat.h" />
+    <ClInclude Include="ImageFormatBase.h" />
     <ClInclude Include="Macros.h" />
     <ClInclude Include="Settings.h" />
     <ClInclude Include="TGAFormat.h" />
