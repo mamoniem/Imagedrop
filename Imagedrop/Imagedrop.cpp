@@ -70,24 +70,20 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		//test to remove!
-		//BMP_Format _format;
-		//_format.OnImageRead(argv[1]);
-
-		//A TGA to load in, and another one to fill (scale up or down)
-		TGA_Format _formatLoaded;
-		TGA_Format _formatGenerated;
+		//the resize multiplier, either passed to the app or auto set to 0.5
 		float _resizeMultiplier;
 
-		/*Prepare a path and filename for the new generated TGA
+		/*Prepare a path and filename for the new generated image
 		either way, a param passed for new image name, or not, then one
 		will be generated from the original file name in case there
-		isn't a name been apssed through arguments)*/
+		isn't a name been apssed through arguments using the same original
+		source image file format)*/
 		std::experimental::filesystem::path _path = argv[1];
+		std::string _fileFormat = _path.extension().string().c_str();
 		std::string _autoName = _path.filename().string().c_str();
 		_autoName.replace(_autoName.end() - 4, _autoName.begin(), "_RESIZED");
 		char _buffer[256];
-		sprintf_s(_buffer, "%s.tga", _autoName.c_str());
+		sprintf_s(_buffer, "%s%s", _autoName.c_str(), _fileFormat.c_str());
 
 		//Check if user input a new file name, or we use the generated value above
 		if (argc < 3)
@@ -105,14 +101,32 @@ int main(int argc, char *argv[])
 		std::chrono::high_resolution_clock::time_point _startTime = std::chrono::high_resolution_clock::now();
 #endif // USE_LOG_TIME
 
-		//Read the TGA passed by arguments (drag'n'drop, commandline or debugger)
-		_formatLoaded.OnImageRead(argv[1]);
+		if (_fileFormat == IMG_FORMAT_BMP)
+		{
 
-		//Resize the TGA into a new empty one
-		_formatLoaded.OnImageResize(_formatGenerated, _resizeMultiplier);
+		}
+		else if (_fileFormat == IMG_FORMAT_JPG)
+		{
 
-		//Write the new TGA to disk
-		_formatGenerated.OnImageWrite((_path.string()).c_str());
+		}
+		else if (_fileFormat == IMG_FORMAT_PNG)
+		{
+
+		}
+		else if (_fileFormat == IMG_FORMAT_TGA)
+		{
+			//A TGA to load in, and another one to fill (scale up or down)
+			TGA_Format _formatLoaded;
+			TGA_Format _formatGenerated;
+			//Read the TGA passed by arguments (drag'n'drop, commandline or debugger)
+			_formatLoaded.OnImageRead(argv[1]);
+			//Resize the TGA into a new empty one
+			_formatLoaded.OnImageResize(_formatGenerated, _resizeMultiplier);
+			//Write the new TGA to disk
+			_formatGenerated.OnImageWrite((_path.string()).c_str());
+		}
+
+		
 
 #ifdef USE_LOG_TIME
 		std::chrono::high_resolution_clock::time_point _endTime = std::chrono::high_resolution_clock::now();

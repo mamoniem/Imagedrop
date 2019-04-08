@@ -1,5 +1,10 @@
 #pragma once
 
+#define IMG_FORMAT_BMP										".bmp"
+#define IMG_FORMAT_JPG										".jpg"
+#define IMG_FORMAT_PNG										".png"
+#define IMG_FORMAT_TGA										".tga"
+
 //Bits (colormap, image type & description)
 #define TGA_COLOR_MAP_TYPE_NO_COLOR_MAP						0
 #define TGA_COLOR_MAP_TYPE_PRESENT							1
