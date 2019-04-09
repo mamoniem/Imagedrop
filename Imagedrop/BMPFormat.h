@@ -53,10 +53,42 @@ public:
 		m_Pixels.shrink_to_fit();
 	}
 
-	size_t SizeInBytes(const BMP_Format &format)
+	size_t SizeInBytes() override
 	{
 		//this shall match the size found in [Right click-> properties] within explorer, if not, then there is an issue
-		return (format.m_Width * format.m_Height * format.m_BitCount / 8);
+		return (m_Width * m_Height * m_BitCount / 8);
+	}
+
+	uint32_t IsGrayScale(const BMP_Format &format)
+	{
+		/*
+		Pixel format
+		- The 1-bit per pixel (1bpp) format supports 2 distinct colors, (for example: black and white). The pixel values are stored in each bit, with the first (left-most) pixel in the most-significant bit of the first byte.[4] Each bit is an index into a table of 2 colors. An unset bit will refer to the first color table entry, and a set bit will refer to the last (second) color table entry.
+		- The 2-bit per pixel (2bpp) format supports 4 distinct colors and stores 4 pixels per 1 byte, the left-most pixel being in the two most significant bits (Windows CE only:[19]). Each pixel value is a 2-bit index into a table of up to 4 colors.
+		- The 4-bit per pixel (4bpp) format supports 16 distinct colors and stores 2 pixels per 1 byte, the left-most pixel being in the more significant nibble.[4] Each pixel value is a 4-bit index into a table of up to 16 colors.
+		- The 8-bit per pixel (8bpp) format supports 256 distinct colors and stores 1 pixel per 1 byte. Each byte is an index into a table of up to 256 colors.
+		- The 16-bit per pixel (16bpp) format supports 65536 distinct colors and stores 1 pixel per 2-byte WORD. Each WORD can define the alpha, red, green and blue samples of the pixel.
+		- The 24-bit pixel (24bpp) format supports 16,777,216 distinct colors and stores 1 pixel value per 3 bytes. Each pixel value defines the red, green and blue samples of the pixel (8.8.8.0.0 in RGBAX notation). Specifically, in the order: blue, green and red (8 bits per each sample).[4]
+		- The 32-bit per pixel (32bpp) format supports 4,294,967,296 distinct colors and stores 1 pixel per 4-byte DWORD. Each DWORD can define the alpha, red, green and blue samples of the pixel.
+		*/
+		return(
+			format.m_BitCount == BMP_PIXEL_FORMAT_1_BPP
+			);
+	}
+
+	uint32_t IsCompressed(const BMP_Format &format)
+	{
+		return(
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_RLE8 ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_RLE4 ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_BITFIELDS ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_JPEG ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_PNG ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_ALPHABITFIELDS ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_CMYK ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_CMYKRLE8 ||
+			format.m_Compression == BMP_COMPRESSION_METHOD_BI_CMYKRLE4
+			);
 	}
 
 	void OnImageRead(const char *path) override
@@ -120,6 +152,7 @@ public:
 			THROW_ERROR("m_imagePixelDepth is neither 32b nor 24b");
 		}
 
+		//TODO::Read the pixels data of the bmp
 		//It's a good place to check if any of the read values is invalid, if needed.
 
 		//Resolve the core required data
@@ -162,14 +195,22 @@ public:
 		LOG("Time Spent - Reading: " << _duration.count()* 1000.f << "ms");
 #endif // USE_LOG_TIME
 
+#ifdef USE_LOG_IMAGE_DATA
+		if (m_Pixels.size() != 0)
+			LOG(m_Pixels.data());
+		else
+			LOG("ERR, the pixels vector is empty or null!");
+#endif // USE_LOG_IMAGE_DATA
+
 		LOG("=================R=E=A=D====B=M=P===============");
 		LOG("ImageWidth: " << m_Width);
 		LOG("ImageHeigh: " << m_Height);
-		LOG("ImageSize: " << SizeInBytes(*this) << "Bytes");
+		LOG("ImageSize: " << SizeInBytes() << "Bytes");
 		LOG("ImageBitsPerPixel: " << size_t(m_BitCount) << "bit");
 		LOG("================================================");
 	}
 
 	void OnImageWrite(const char *path) override {}
+
 	void OnImageResize(ImageFormatBase &newFormat, float resizeMultiplier) override {}
 };

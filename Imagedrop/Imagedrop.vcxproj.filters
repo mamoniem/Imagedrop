@@ -34,5 +34,8 @@
     <ClInclude Include="ImageFormatBase.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Consts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

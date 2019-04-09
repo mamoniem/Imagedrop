@@ -19,11 +19,11 @@ NULL				[1 byte]
 Total				[26 bytes]
 */
 static const char tgaEmptyFooterBytes[] =
-"\0\0\0\0"					//may be add some info here if needed for copyright & such
-"\0\0\0\0"					//may be add some info here if needed for copyright & such
-"TRUEVISION-XFILE"
-"."
-"\0";
+"\0\0\0\0"										//[4bytes]	-	Extension offset	Offset in bytes from the beginning of the file
+"\0\0\0\0"										//[4bytes]	-	Developer area offset	Offset in bytes from the beginning of the file
+"TRUEVISION-XFILE"								//[16bytes]	-	Signature	Contains "TRUEVISION-XFILE"
+"."												//[1byte]	-	Contains "."
+"\0";											//[1byte]	-	Contains NULL
 static const size_t tgaFooterSize = 26;
 
 /*
@@ -37,36 +37,34 @@ static const size_t tgaFooterSize = 26;
 class TGA_Format : public ImageFormatBase
 {
 public:
-	uint8_t						*m_id;
-	uint8_t						*m_colorMapData;
-	std::vector<uint8_t>		m_pixels;
+	//Header
+	uint8_t m_IdLength;							//[1byte]	-	Image ID length (field 1), ID Length - date, time, ver, etc.
+	uint8_t m_ColorMapType;						//[1byte]	-	Color map type (field 2), 0 if image file contains no color map || 1 if present || 2–127 reserved by Truevision || 128–255 available for developer use
+	uint8_t m_ImageType;						//[1byte]	-	Image type (field 3), 0 no image data is present || 1 uncompressed color-mapped image || 2 uncompressed true-color image || 3 uncompressed black-and-white (grayscale) image || 9 run-length encoded color-mapped image || 10 run-length encoded true-color image || 11 run-length encoded black-and-white (grayscale) image
 
-	//ID Length - date, time, ver, etc.			[1byte]
-	uint8_t						m_idLength;
+	//Color map specification (field 4)			//[5bytes]	-	Split into 2, 2, 1
+	uint16_t m_ColorMapFirstEntryIndex;			//[2bytes]	-	Index of first color map entry that is included in the file
+	uint16_t m_ColorMapLength;					//[2bytes]	-	Number of entries of the color map that are included in the file
+	uint8_t m_ColorMapEntrySize;				//[1byte]	-	Number of bits per pixel
 
-	//Color Map Type							[1byte]
-	uint8_t						m_colorMapType;
+	//Image specification (field 5)				//[10bytes]	-	Split into 2, 2, 2, 2, 1, 1
+	uint16_t m_ImageOriginX;					//[2bytes]	-	Absolute coordinate of lower-left corner for displays where origin is at the lower left
+	uint16_t m_ImageOriginY;					//[2bytes]	-	As for X-origin
+	uint16_t m_ImageWidth;						//[2bytes]	-	Width in pixels
+	uint16_t m_ImageHeigh;						//[2bytes]	-	Height in pixels
+	uint8_t m_ImagePixelDepth;					//[1byte]	-	Bits per pixel
+	uint8_t m_ImageDescription;					//[1byte]	-	Bits 3-0 give the alpha channel depth, bits 5-4 give direction
 
-	//Image Type								[1byte]
-	uint8_t						m_imageType;
+	//Developer area (optional)
 
-	//Color Map Specification					[5bytes]
-	uint16_t					m_colorMapFirstEntryIndex;
-	uint16_t					m_colorMapLength;
-	uint8_t						m_colorMapEntrySize;
+	//Extension area (optional)
 
-	//Image Specification						[10bytes]
-	uint16_t					m_imageOriginX;
-	uint16_t					m_imageOriginY;
-	uint16_t					m_imageWidth;
-	uint16_t					m_imageHeigh;
-	uint8_t						m_imagePixelDepth;
-	uint8_t						m_imageDescription;
+	//File footer (optional)
 
-	//Extension
-
-	//make more sense of the number 32 is 4 channels and 24 is 3 channels
-	long						m_channels;
+	uint8_t *m_Id;
+	uint8_t *m_ColorMapData;
+	std::vector<uint8_t> m_Pixels;
+	long m_Channels;							//make more sense of the number 32 is 4 channels and 24 is 3 channels
 
 	//I don't need so far to initialize the constructor with any values
 	TGA_Format()
@@ -77,32 +75,32 @@ public:
 	~TGA_Format()
 	{
 		//just in case
-		m_pixels.clear();
-		m_pixels.shrink_to_fit();
-		free(m_id);
-		free(m_colorMapData);
+		m_Pixels.clear();
+		m_Pixels.shrink_to_fit();
+		free(m_Id);
+		free(m_ColorMapData);
 	}
 
-	size_t SizeInBytes(const TGA_Format &format)
+	size_t SizeInBytes() override
 	{
 		//this shall match the size found in [Right click-> properties] within explorer, if not, then there is an issue
-		return (format.m_imageWidth * format.m_imageHeigh * format.m_imagePixelDepth / 8);
+		return (m_ImageWidth * m_ImageHeigh * m_ImagePixelDepth / 8);
 	}
 
 	uint8_t IsGrayScale(const TGA_Format &format)
 	{
 		return(
-			format.m_imageType == TGA_IMAGE_TYPE_UNCOMPRESSED_GRAYSCALE ||
-			format.m_imageType == TGA_IMAGE_TYPE_RLE_ENCODED_GRAYSCALE
+			format.m_ImageType == TGA_IMAGE_TYPE_UNCOMPRESSED_GRAYSCALE ||
+			format.m_ImageType == TGA_IMAGE_TYPE_RLE_ENCODED_GRAYSCALE
 			);
 	}
 
 	uint8_t IsCompressed(const TGA_Format &format)
 	{
 		return(
-			format.m_imageType == TGA_IMAGE_TYPE_RLE_ENCODED_COLOR_MAPPED ||
-			format.m_imageType == TGA_IMAGE_TYPE_RLE_ENCODED_TRUE_COLOR ||
-			format.m_imageType == TGA_IMAGE_TYPE_RLE_ENCODED_GRAYSCALE
+			format.m_ImageType == TGA_IMAGE_TYPE_RLE_ENCODED_COLOR_MAPPED ||
+			format.m_ImageType == TGA_IMAGE_TYPE_RLE_ENCODED_TRUE_COLOR ||
+			format.m_ImageType == TGA_IMAGE_TYPE_RLE_ENCODED_GRAYSCALE
 			);
 	}
 
@@ -123,8 +121,8 @@ public:
 			THROW_ERROR("fopen is NULL  [Read]");
 		}
 
-		m_id = NULL;
-		m_colorMapData = NULL;
+		m_Id = NULL;
+		m_ColorMapData = NULL;
 
 		//read from file with the same order & store into the TGA blocks.
 		//ID Length						[1byte] 8
@@ -132,24 +130,24 @@ public:
 		//Image Type					[1byte] 8
 		//Color Map Specification		[5bytes] 16, 16, 8
 		//Image Specification			[10bytes] 16, 16, 16, 16, 8, 8
-		fread(&m_idLength, 1, 1, _file);
+		fread(&m_IdLength, 1, 1, _file);
 
-		fread(&m_colorMapType, 1, 1, _file);
+		fread(&m_ColorMapType, 1, 1, _file);
 
-		fread(&m_imageType, 1, 1, _file);
+		fread(&m_ImageType, 1, 1, _file);
 
-		fread(&m_colorMapFirstEntryIndex, 2, 1, _file);
-		fread(&m_colorMapLength, 2, 1, _file);
-		fread(&m_colorMapEntrySize, 1, 1, _file);
+		fread(&m_ColorMapFirstEntryIndex, 2, 1, _file);
+		fread(&m_ColorMapLength, 2, 1, _file);
+		fread(&m_ColorMapEntrySize, 1, 1, _file);
 
-		fread(&m_imageOriginX, 2, 1, _file);
-		fread(&m_imageOriginY, 2, 1, _file);
-		fread(&m_imageWidth, 2, 1, _file);
-		fread(&m_imageHeigh, 2, 1, _file);
-		fread(&m_imagePixelDepth, 1, 1, _file);
-		fread(&m_imageDescription, 1, 1, _file);
+		fread(&m_ImageOriginX, 2, 1, _file);
+		fread(&m_ImageOriginY, 2, 1, _file);
+		fread(&m_ImageWidth, 2, 1, _file);
+		fread(&m_ImageHeigh, 2, 1, _file);
+		fread(&m_ImagePixelDepth, 1, 1, _file);
+		fread(&m_ImageDescription, 1, 1, _file);
 
-		if (m_imagePixelDepth < 24)
+		if (m_ImagePixelDepth < 24)
 		{
 			LOG("ERR	m_imagePixelDepth is neither 32b nor 24b");
 			THROW_ERROR("m_imagePixelDepth is neither 32b nor 24b");
@@ -158,33 +156,33 @@ public:
 		//It's a good place to check if any of the read values is invalid, if needed.
 
 		//Resolve the core required data
-		if (m_idLength > 0)
+		if (m_IdLength > 0)
 		{
-			m_id = (uint8_t*)malloc(m_idLength);
+			m_Id = (uint8_t*)malloc(m_IdLength);
 
-			if (m_id == NULL)
+			if (m_Id == NULL)
 			{
 				LOG("ERR	m_id is NULL");
 				THROW_ERROR("m_id is NULL");
 			}
 
-			fread(&m_id, m_idLength, 1, _file);
+			fread(&m_Id, m_IdLength, 1, _file);
 		}
 
-		if (m_colorMapType == TGA_COLOR_MAP_TYPE_PRESENT)
+		if (m_ColorMapType == TGA_COLOR_MAP_TYPE_PRESENT)
 		{
-			m_colorMapData = (uint8_t*)malloc((m_colorMapFirstEntryIndex + m_colorMapLength) * m_colorMapEntrySize / 8);
+			m_ColorMapData = (uint8_t*)malloc((m_ColorMapFirstEntryIndex + m_ColorMapLength) * m_ColorMapEntrySize / 8);
 
-			if (m_colorMapData == NULL)
+			if (m_ColorMapData == NULL)
 			{
 				LOG("ERR	m_colorMapData is NULL");
 				THROW_ERROR("m_colorMapData is NULL");
 			}
 
-			fread(&m_colorMapData + (m_colorMapFirstEntryIndex * m_colorMapEntrySize / 8), m_colorMapLength * m_colorMapEntrySize / 8, 1, _file);
+			fread(&m_ColorMapData + (m_ColorMapFirstEntryIndex * m_ColorMapEntrySize / 8), m_ColorMapLength * m_ColorMapEntrySize / 8, 1, _file);
 		}
 
-		m_pixels.resize(SizeInBytes(*this));
+		m_Pixels.resize(SizeInBytes());
 
 		//check for RLE
 		if (IsCompressed(*this))
@@ -194,10 +192,10 @@ public:
 		}
 		else
 		{
-			fread(&m_pixels[0], SizeInBytes(*this), 1, _file);
+			fread(&m_Pixels[0], SizeInBytes(), 1, _file);
 		}
 
-		m_channels = m_imageWidth * (m_imagePixelDepth > 24 ? m_imagePixelDepth > 16 ? 4 : 3 : 3);
+		m_Channels = m_ImageWidth * (m_ImagePixelDepth > 24 ? m_ImagePixelDepth > 16 ? 4 : 3 : 3);
 
 		//close the file
 		fclose(_file);
@@ -208,21 +206,29 @@ public:
 		LOG("Time Spent - Reading: " << _duration.count()* 1000.f << "ms");
 #endif // USE_LOG_TIME
 
-		LOG("====================R=E=A=D=====================");
-		LOG("ImageWidth: " << m_imageWidth);
-		LOG("ImageHeigh: " << m_imageHeigh);
-		LOG("ImageSize: " << SizeInBytes(*this) << "Bytes");
-		LOG("ImageBitsPerPixel: " << size_t(m_imagePixelDepth) << "bit");
+#ifdef USE_LOG_IMAGE_DATA
+		if (m_Pixels.size() != 0)
+			LOG(m_Pixels.data());
+		else
+			LOG("ERR, the pixels vector is empty or null!");
+#endif // USE_LOG_IMAGE_DATA
+
+
+		LOG("=================R=E=A=D====T=G=A===============");
+		LOG("ImageWidth: " << m_ImageWidth);
+		LOG("ImageHeigh: " << m_ImageHeigh);
+		LOG("ImageSize: " << SizeInBytes() << "Bytes");
+		LOG("ImageBitsPerPixel: " << size_t(m_ImagePixelDepth) << "bit");
 		LOG("================================================");
 	}
 
 	void OnImageWrite(const char *path) override
 	{
 		LOG("===================W=R=I=T=E====================");
-		LOG("ImageWidth: " << m_imageWidth);
-		LOG("ImageHeigh: " << m_imageHeigh);
-		LOG("ImageSize: " << SizeInBytes(*this) << "Bytes");
-		LOG("ImageBitsPerPixel: " << size_t(m_imagePixelDepth) << "bit");
+		LOG("ImageWidth: " << m_ImageWidth);
+		LOG("ImageHeigh: " << m_ImageHeigh);
+		LOG("ImageSize: " << SizeInBytes() << "Bytes");
+		LOG("ImageBitsPerPixel: " << size_t(m_ImagePixelDepth) << "bit");
 		LOG("================================================");
 
 #ifdef USE_LOG_TIME
@@ -245,31 +251,31 @@ public:
 		//Image Type					[1byte] 8
 		//Color Map Specification		[5bytes] 16, 16, 8
 		//Image Specification			[10bytes] 16, 16, 16, 16, 8, 8
-		fwrite(&m_idLength, 1, 1, _file);
+		fwrite(&m_IdLength, 1, 1, _file);
 
-		fwrite(&m_colorMapType, 1, 1, _file);
+		fwrite(&m_ColorMapType, 1, 1, _file);
 
-		fwrite(&m_imageType, 1, 1, _file);
+		fwrite(&m_ImageType, 1, 1, _file);
 
-		fwrite(&m_colorMapFirstEntryIndex, 2, 1, _file);
-		fwrite(&m_colorMapLength, 2, 1, _file);
-		fwrite(&m_colorMapEntrySize, 1, 1, _file);
+		fwrite(&m_ColorMapFirstEntryIndex, 2, 1, _file);
+		fwrite(&m_ColorMapLength, 2, 1, _file);
+		fwrite(&m_ColorMapEntrySize, 1, 1, _file);
 
-		fwrite(&m_imageOriginX, 2, 1, _file);
-		fwrite(&m_imageOriginY, 2, 1, _file);
-		fwrite(&m_imageWidth, 2, 1, _file);
-		fwrite(&m_imageHeigh, 2, 1, _file);
-		fwrite(&m_imagePixelDepth, 1, 1, _file);
-		fwrite(&m_imageDescription, 1, 1, _file);
+		fwrite(&m_ImageOriginX, 2, 1, _file);
+		fwrite(&m_ImageOriginY, 2, 1, _file);
+		fwrite(&m_ImageWidth, 2, 1, _file);
+		fwrite(&m_ImageHeigh, 2, 1, _file);
+		fwrite(&m_ImagePixelDepth, 1, 1, _file);
+		fwrite(&m_ImageDescription, 1, 1, _file);
 
-		if (m_idLength > 0)
+		if (m_IdLength > 0)
 		{
-			fwrite(&m_id, m_idLength, 1, _file);
+			fwrite(&m_Id, m_IdLength, 1, _file);
 		}
 
-		if (m_colorMapType == TGA_COLOR_MAP_TYPE_PRESENT)
+		if (m_ColorMapType == TGA_COLOR_MAP_TYPE_PRESENT)
 		{
-			fwrite(&m_colorMapData + (m_colorMapFirstEntryIndex * m_colorMapEntrySize / 8), m_colorMapLength * m_colorMapEntrySize / 8, 1, _file);
+			fwrite(&m_ColorMapData + (m_ColorMapFirstEntryIndex * m_ColorMapEntrySize / 8), m_ColorMapLength * m_ColorMapEntrySize / 8, 1, _file);
 		}
 
 		if (IsCompressed(*this))
@@ -278,7 +284,7 @@ public:
 		}
 		else
 		{
-			fwrite(&m_pixels[0], SizeInBytes(*this), 1, _file);
+			fwrite(&m_Pixels[0], SizeInBytes(), 1, _file);
 		}
 
 		fwrite(tgaEmptyFooterBytes, tgaFooterSize, 1, _file);
@@ -295,8 +301,8 @@ public:
 
 	const uint8_t* NeighbourPtr(const TGA_Format &format, int xIndex, int yIndex)
 	{
-		CLAMP_PIXEL(xIndex, 0, format.m_imageWidth - 1, yIndex, 0, format.m_imageHeigh - 1);
-		return &format.m_pixels[(yIndex * format.m_channels) + xIndex * (format.m_imagePixelDepth > 24 ? format.m_imagePixelDepth > 16 ? 4 : 3 : 3)];
+		CLAMP_PIXEL(xIndex, 0, format.m_ImageWidth - 1, yIndex, 0, format.m_ImageHeigh - 1);
+		return &format.m_Pixels[(yIndex * format.m_Channels) + xIndex * (format.m_ImagePixelDepth > 24 ? format.m_ImagePixelDepth > 16 ? 4 : 3 : 3)];
 	}
 
 	uint8_t BilinearPixelColor(const uint8_t* BL, const uint8_t* BR, const uint8_t* TL, const uint8_t* TR, float W, float H, int index)
@@ -323,46 +329,46 @@ public:
 
 		//Fill members of the new resized version
 		//let's start with the idintical ones, info that will probably remain the same
-		newFormat.m_id = m_id;
-		newFormat.m_colorMapData = m_colorMapData;
-		newFormat.m_idLength = m_idLength;
-		newFormat.m_colorMapType = m_colorMapType;
-		newFormat.m_imageType = m_imageType;
-		newFormat.m_colorMapFirstEntryIndex = m_colorMapFirstEntryIndex;
-		newFormat.m_colorMapLength = m_colorMapLength;
-		newFormat.m_colorMapEntrySize = m_colorMapEntrySize;
-		newFormat.m_imageOriginX = m_imageOriginX;
-		newFormat.m_imageOriginY = m_imageOriginY;
-		newFormat.m_imagePixelDepth = m_imagePixelDepth;
-		newFormat.m_imageDescription = m_imageDescription;
+		newFormat.m_Id = m_Id;
+		newFormat.m_ColorMapData = m_ColorMapData;
+		newFormat.m_IdLength = m_IdLength;
+		newFormat.m_ColorMapType = m_ColorMapType;
+		newFormat.m_ImageType = m_ImageType;
+		newFormat.m_ColorMapFirstEntryIndex = m_ColorMapFirstEntryIndex;
+		newFormat.m_ColorMapLength = m_ColorMapLength;
+		newFormat.m_ColorMapEntrySize = m_ColorMapEntrySize;
+		newFormat.m_ImageOriginX = m_ImageOriginX;
+		newFormat.m_ImageOriginY = m_ImageOriginY;
+		newFormat.m_ImagePixelDepth = m_ImagePixelDepth;
+		newFormat.m_ImageDescription = m_ImageDescription;
 
 		//of course the diminsions will be based on the scaleMultiplier
-		newFormat.m_imageWidth = uint16_t(float(m_imageWidth)*resizeMultiplier);
-		newFormat.m_imageHeigh = uint16_t(float(m_imageHeigh)*resizeMultiplier);
+		newFormat.m_ImageWidth = uint16_t(float(m_ImageWidth)*resizeMultiplier);
+		newFormat.m_ImageHeigh = uint16_t(float(m_ImageHeigh)*resizeMultiplier);
 
-		newFormat.m_channels = newFormat.m_imageWidth * (newFormat.m_imagePixelDepth > 24 ? newFormat.m_imagePixelDepth > 16 ? 4 : 3 : 3);
+		newFormat.m_Channels = newFormat.m_ImageWidth * (newFormat.m_ImagePixelDepth > 24 ? newFormat.m_ImagePixelDepth > 16 ? 4 : 3 : 3);
 
 		//expand or shrink, to fit the amount of pixels and channels for the new image size [NewWidth*NewHigh*Depth/8b]
-		newFormat.m_pixels.resize((const unsigned int)(
-			(m_imageWidth*resizeMultiplier) *
-			(m_imageHeigh*resizeMultiplier) *
-			(m_imagePixelDepth) / 8));
+		newFormat.m_Pixels.resize((const unsigned int)(
+			(m_ImageWidth*resizeMultiplier) *
+			(m_ImageHeigh*resizeMultiplier) *
+			(m_ImagePixelDepth) / 8));
 
-		uint8_t *_currentRow = &newFormat.m_pixels[0];
-		for (int y = 0; y < newFormat.m_imageHeigh; y++)
+		uint8_t *_currentRow = &newFormat.m_Pixels[0];
+		for (int y = 0; y < newFormat.m_ImageHeigh; y++)
 		{
 			uint8_t *_pixel = _currentRow;
-			float _vertical = float(y) / float(newFormat.m_imageHeigh - 1);
-			for (int x = 0; x < newFormat.m_imageWidth; x++)
+			float _vertical = float(y) / float(newFormat.m_ImageHeigh - 1);
+			for (int x = 0; x < newFormat.m_ImageWidth; x++)
 			{
-				float _horizontal = float(x) / float(newFormat.m_imageWidth - 1);
+				float _horizontal = float(x) / float(newFormat.m_ImageWidth - 1);
 
 				//start resampling in bilinear
 				//TODO::may be good move this to its own function later. Also can put macros here to measure the bilinear time only if needed
 
 				//ease the move between pixels of the TGA vertically and horizontally
-				float _w = (_horizontal * m_imageWidth);
-				float _h = (_vertical * m_imageHeigh);
+				float _w = (_horizontal * m_ImageWidth);
+				float _h = (_vertical * m_ImageHeigh);
 
 				int _indexX = int(_w);
 				int _indexY = int(_h);
@@ -403,7 +409,7 @@ public:
 				std::array<uint8_t, 4> _outRGBA;
 
 				//interpolate the colors for the new pixels
-				if (m_imagePixelDepth > 24) //32RGBA
+				if (m_ImagePixelDepth > 24) //32RGBA
 				{
 					for (int i = 0; i < 4; i++)
 					{
@@ -431,7 +437,7 @@ public:
 					_pixel += 3; //skip 3
 				}
 			}
-			_currentRow += newFormat.m_channels;
+			_currentRow += newFormat.m_Channels;
 		}
 
 #ifdef USE_LOG_TIME

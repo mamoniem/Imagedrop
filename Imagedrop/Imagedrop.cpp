@@ -41,6 +41,7 @@ The usage:
 #include <filesystem>
 #include <chrono>
 #include <array>
+#include "Consts.h"
 #include "Bits.h"
 #include "Macros.h"
 #include "ImageFormatBase.h"
@@ -103,7 +104,9 @@ int main(int argc, char *argv[])
 
 		if (_fileFormat == IMG_FORMAT_BMP)
 		{
-
+			BMP_Format _formatLoaded;
+			BMP_Format _formatGenerated;
+			_formatLoaded.OnImageRead(argv[1]);
 		}
 		else if (_fileFormat == IMG_FORMAT_JPG)
 		{
